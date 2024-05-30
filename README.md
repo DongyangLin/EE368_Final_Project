@@ -13,4 +13,4 @@ The project contains three `python` files: `Arm.py`, `ArmControl.py`,`gen_path.p
 
 `gen_path.py`: generating 3D plot paths.
 
-![image](https://github.com/DongyangLin/EE368_Final_Project/assets/105159371/a2e0aa57-3f2a-4cbc-8149-dad6db768166)
+<img src="https://github.com/DongyangLin/EE368_Final_Project/assets/105159371/a2e0aa57-3f2a-4cbc-8149-dad6db768166" width="50%">

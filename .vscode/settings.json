@@ -1,0 +1,14 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/kkee368/robotsim_ws/devel/lib/python3/dist-packages",
+        "/home/kkee368/catkin_ws/devel/lib/python3/dist-packages",
+        "/home/kkee368/catkin_workspace/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/kkee368/robotsim_ws/devel/lib/python3/dist-packages",
+        "/home/kkee368/catkin_ws/devel/lib/python3/dist-packages",
+        "/home/kkee368/catkin_workspace/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages"
+    ]
+}

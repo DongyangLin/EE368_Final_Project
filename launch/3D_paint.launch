@@ -1,0 +1,9 @@
+<launch>
+    <!-- Node 1 -->
+    <node pkg="project" type="gen_path_node" name="gen_path_node" output="screen">
+    </node>
+
+    <!-- Node 2 -->
+    <node pkg="project" type="arm_node" name="arm_node" output="screen">
+    </node>
+</launch>

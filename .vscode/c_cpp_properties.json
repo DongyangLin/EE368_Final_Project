@@ -1,0 +1,47 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/kkee368/robotsim_ws/devel/include/**",
+        "/home/kkee368/catkin_ws/devel/include/**",
+        "/home/kkee368/catkin_workspace/devel/include/**",
+        "/opt/ros/noetic/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/amcl/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/base_local_planner/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/carrot_planner/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/clear_costmap_recovery/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/costmap_2d/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/dwa_local_planner/include/**",
+        "/home/kkee368/catkin_workspace/src/ros_kortex/third_party/gazebo-pkgs/gazebo_grasp_plugin/include/**",
+        "/home/kkee368/catkin_workspace/src/ros_kortex/third_party/gazebo-pkgs/gazebo_version_helpers/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/global_planner/include/**",
+        "/home/kkee368/catkin_workspace/src/kkarm/include/**",
+        "/home/kkee368/catkin_workspace/src/ros_kortex/kortex_driver/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/map_server/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/move_base/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/move_slow_and_clear/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/nav_core/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/navfn/include/**",
+        "/home/kkee368/robotsim_ws/src/navigation_pkg/include/**",
+        "/home/kkee368/catkin_workspace/src/project/include/**",
+        "/home/kkee368/robotsim_ws/src/read_map/include/**",
+        "/home/kkee368/robotsim_ws/src/robot_gazebo_pkg/include/**",
+        "/home/kkee368/catkin_workspace/src/ros_kortex/third_party/roboticsgroup_upatras_gazebo_plugins/include/**",
+        "/home/kkee368/robotsim_ws/src/rossim_pkg/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/rotate_recovery/include/**",
+        "/home/kkee368/catkin_ws/src/navigation/voxel_grid/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

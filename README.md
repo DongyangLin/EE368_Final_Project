@@ -1,5 +1,6 @@
 # EE368 Final Project
 Zikun Zhuang, Zhiyi Zhang, Jixian Wang
+
 SUSTech
 ## Goal
 This project aims to build a 3D painting robot, including the path planning, robot control, forward and inverse kinematics.

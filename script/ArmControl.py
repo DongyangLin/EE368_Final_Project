@@ -39,6 +39,7 @@ class ArmControl(object):
             self.real_path_ = Path()
             self.real_path_.header.frame_id = 'base_link'
             self.arm_model = Gen3LiteArm()
+            self.target_pose_list = []
 
             # Init the subscribers and publishers
             self.path_subscriber = rospy.Subscriber("/myPath", Path, self.get_path, queue_size=1)
@@ -204,14 +205,16 @@ class ArmControl(object):
             rospy.logerr("No path received yet")
             return False
         
+        # First calculate the target poses
         for i in range(len(self.my_path_.poses)):
             ref_ee_pose=[self.my_path_.poses[i].pose.position.x,self.my_path_.poses[i].pose.position.y,self.my_path_.poses[i].pose.position.z]
             ev_angles=self.arm_model.arm.inverse_kinematics(ref_ee_pose,np.zeros(6))
-            print("Angles:",np.degrees(ev_angles))
             ev_poses=self.forward_kinematics(ev_angles)
-            print("Ev_poses:",ev_poses)
-            print("Real_poses:",ref_ee_pose)
-            if not self.go_to_pose(ev_poses,i):
+            self.target_pose_list.append(ev_poses)
+        
+        # Then go to each target pose
+        for i in range(len(self.target_pose_list)):
+            if not self.go_to_pose(self.target_pose_list[i],i):
                 return False
         return True
     

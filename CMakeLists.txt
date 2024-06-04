@@ -44,4 +44,7 @@ target_link_libraries(gen_path_node ${catkin_LIBRARIES})
 catkin_install_python(PROGRAMS script/ArmControl.py
                                script/gen_path.py
                                script/gen_circle.py
+                               script/test.py
+                               script/circle.py
+                               script/lqr.py
                       DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})

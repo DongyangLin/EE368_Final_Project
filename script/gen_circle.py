@@ -42,7 +42,7 @@ def generate_circle_path():
     center_y = 0.194
     center_z = 0.457
     radius = 0.1
-    sample_angel = 10
+    sample_angel = 8
     num_points = int(360/sample_angel)
 
     for i in range(num_points):

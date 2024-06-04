@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from Arm import Gen3LiteArm
 from scipy.spatial.transform import Rotation
 import signal
+from collections import deque
 
 class ArmControl(object):
     def __init__(self):
@@ -36,6 +37,7 @@ class ArmControl(object):
             # Init class members
             self.my_path_ = None
             self.curr_state_ = None
+            self.state_history = deque(maxlen=8)  # 窗口大小为5的队列
             self.plot = False
             self.real_path_ = Path()
             self.real_path_.header.frame_id = 'base_link'
@@ -43,8 +45,10 @@ class ArmControl(object):
             self.target_pose_list = []
 
             # Init LQR Controller
-            self.lqr = LQRControl(0.1)
+            self.dt = 0.001
+            self.lqr = LQRControl(self.dt)
             self.lqr.solve()
+            self.v_history = deque(maxlen=5)
 
             # Init the subscribers and publishers
             self.path_subscriber = rospy.Subscriber("/myPath", Path, self.get_path, queue_size=1)
@@ -72,6 +76,10 @@ class ArmControl(object):
             rospy.wait_for_service(set_cartesian_reference_frame_full_name)
             self.set_cartesian_reference_frame = rospy.ServiceProxy(set_cartesian_reference_frame_full_name, SetCartesianReferenceFrame)
 
+            send_gripper_command_full_name = '/' + self.robot_name + '/base/send_gripper_command'
+            rospy.wait_for_service(send_gripper_command_full_name)
+            self.send_gripper_command = rospy.ServiceProxy(send_gripper_command_full_name, SendGripperCommand)
+            
             activate_publishing_of_action_notification_full_name = '/' + self.robot_name + '/base/activate_publishing_of_action_topic'
             rospy.wait_for_service(activate_publishing_of_action_notification_full_name)
             self.activate_publishing_of_action_notification = rospy.ServiceProxy(activate_publishing_of_action_notification_full_name, OnNotificationActionTopic)
@@ -169,8 +177,13 @@ class ArmControl(object):
         self.my_path_ = msg
     
     def get_curr_state(self, msg):
-        self.curr_state_ = np.array(msg.position[0:6])
-        print(np.degrees(self.curr_state_))
+        current_state = np.array(msg.position[0:6])
+        self.state_history.append(current_state)
+        if len(self.state_history) == self.state_history.maxlen:
+            self.curr_state_ = np.mean(self.state_history, axis=0)
+        else:
+            self.curr_state_ = current_state
+        # print(np.degrees(self.curr_state_))
         # self.curr_state_ = msg
         self.plot_real_path()
 
@@ -251,7 +264,7 @@ class ArmControl(object):
             joint_speeds = Base_JointSpeeds()
             for i, speed in enumerate(speeds):
                 joint_speed = JointSpeed()
-                joint_speed.joint_identifier = i + 1
+                joint_speed.joint_identifier = i
                 joint_speed.value = speed
                 joint_speed.duration = 0  # 0 for continuous command
                 joint_speeds.joint_speeds.append(joint_speed)
@@ -264,19 +277,24 @@ class ArmControl(object):
             print(f"Service call failed: {e}")
 
     def go_to_pose(self, xd):
+        self.v_history.clear()
         # Convert target to degrees
         xd = np.degrees(xd)
         x0 = self.get_joint_angels()
         # print("Current State: ", x0)
-        print("Current State: ", np.degrees(self.curr_state_))
-        while np.linalg.norm(x0 - xd) > 2:
+        while np.linalg.norm(x0 - xd) > 1:
             x0 = self.get_joint_angels()
-            print("Current State: ", x0)
+            print("Current State: ", np.degrees(self.curr_state_))
             print("Target State: ", xd)
             u = -self.lqr.K.dot(x0 - xd)
             u = np.radians(u)
+            print("Control Signal: ", u)
+            # self.v_history.append(u)
+            # if len(self.v_history) == self.v_history.maxlen:
+            #     u = np.mean(self.v_history, axis=0)
+            # print("Control Signal: ", u)
             self.send_joint_speeds_command(u)
-            time.sleep(0.1)
+            time.sleep(self.dt)
         return True
 
     def follow_path(self):
@@ -292,11 +310,34 @@ class ArmControl(object):
             # ev_poses=self.forward_kinematics(ev_angles)
             self.target_pose_list.append(ev_angles)
         
+        print("Begin Path!")
         # Then go to each target pose
         for i in range(len(self.target_pose_list)):
             if not self.go_to_pose(self.target_pose_list[i]):
                 return False
         return True
+    
+    def example_send_gripper_command(self, value):
+        # Initialize the request
+        # Close the gripper
+        req = SendGripperCommandRequest()
+        finger = Finger()
+        finger.finger_identifier = 0
+        finger.value = value
+        req.input.gripper.finger.append(finger)
+        req.input.mode = GripperMode.GRIPPER_POSITION
+
+        rospy.loginfo("Sending the gripper command...")
+
+        # Call the service 
+        try:
+            self.send_gripper_command(req)
+        except rospy.ServiceException:
+            rospy.logerr("Failed to call SendGripperCommand")
+            return False
+        else:
+            time.sleep(3)
+            return True
 
     def main(self):
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -315,6 +356,9 @@ class ArmControl(object):
 
         # Subscribe to the robot notification
         if not self.example_subscribe_to_a_robot_notification():
+            return
+        
+        if not self.example_send_gripper_command(1.0):
             return
 
         # Home the robot
@@ -336,15 +380,15 @@ class ArmControl(object):
         self.action_topic_sub.unregister()
 
         rospy.loginfo("All done!")
-    
+
 class LQRControl:
     def __init__(self, dt):
         self.n = 6
         self.A = np.eye(self.n)
         self.B = dt*np.eye(self.n)
         self.dt = dt
-        self.Q = np.diag([20, 20, 20, 20, 20, 20])
-        self.R = np.diag([30,30,30,30,30,30])
+        self.Q = np.diag([100, 100, 100, 100, 100, 100])
+        self.R = np.diag([0.008, 0.008, 0.008, 0.008, 0.008, 0.008])
         self.K = None
     
     def solve(self):
@@ -359,6 +403,7 @@ class LQRControl:
             P = Pnext
         else:
             print('Max Iterations Reached')
+            exit(0)
         self.K = np.linalg.inv(self.R + self.B.T.dot(P).dot(self.B)).dot(self.B.T).dot(P).dot(self.A)
 
 if __name__ == '__main__':

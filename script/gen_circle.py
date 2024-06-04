@@ -42,7 +42,7 @@ def generate_circle_path():
     center_y = 0.194
     center_z = 0.457
     radius = 0.1
-    sample_angel = 15
+    sample_angel = 10
     num_points = int(360/sample_angel)
 
     for i in range(num_points):
@@ -63,6 +63,19 @@ def generate_circle_path():
         pose_stamped.pose.orientation.z = q.z
         pose_stamped.pose.orientation.w = q.w
         path.poses.append(pose_stamped)
+    
+    pose_stamped = PoseStamped()
+    pose_stamped.header.frame_id = "base_link"
+    pose_stamped.header.stamp = rospy.Time.now()
+    pose_stamped.pose.position.x = center_x + radius
+    pose_stamped.pose.position.y = center_y  # 固定y轴坐标
+    pose_stamped.pose.position.z = center_z
+    q = euler_to_quaternion(90.0, 0.0, 150.0)  # 保持角度不变
+    pose_stamped.pose.orientation.x = q.x
+    pose_stamped.pose.orientation.y = q.y
+    pose_stamped.pose.orientation.z = q.z
+    pose_stamped.pose.orientation.w = q.w
+    path.poses.append(pose_stamped)
 
     return path
 

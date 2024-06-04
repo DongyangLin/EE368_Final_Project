@@ -14,6 +14,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from Arm import Gen3LiteArm
 from scipy.spatial.transform import Rotation
+import signal
 
 class ArmControl(object):
     def __init__(self):
@@ -40,6 +41,10 @@ class ArmControl(object):
             self.real_path_.header.frame_id = 'base_link'
             self.arm_model = Gen3LiteArm()
             self.target_pose_list = []
+
+            # Init LQR Controller
+            self.lqr = LQRControl(0.1)
+            self.lqr.solve()
 
             # Init the subscribers and publishers
             self.path_subscriber = rospy.Subscriber("/myPath", Path, self.get_path, queue_size=1)
@@ -75,7 +80,10 @@ class ArmControl(object):
         else:
             self.is_init_success = True
 
-        
+    def signal_handler(self, sig, frame):
+        self.send_joint_speeds_command([0, 0, 0, 0, 0, 0])
+        print("Ctrl+C pressed")
+        sys.exit(0)
     
     def cb_action_topic(self, notif):
             self.last_action_notif_type = notif.action_event
@@ -156,70 +164,22 @@ class ArmControl(object):
 
         rospy.sleep(1.0)
         return True
-    
-    def go_to_pose(self, pose, id):
-        my_cartesian_speed = CartesianSpeed()
-        my_cartesian_speed.translation = 0.2 # m/s
-        my_cartesian_speed.orientation = 20  # deg/s
 
-        my_constrained_pose = ConstrainedPose()
-        my_constrained_pose.constraint.oneof_type.speed.append(my_cartesian_speed)
-
-        my_constrained_pose.target_pose.x = pose[0]
-        my_constrained_pose.target_pose.y = pose[1]
-        my_constrained_pose.target_pose.z = pose[2]
-        my_constrained_pose.target_pose.theta_x = pose[3]
-        my_constrained_pose.target_pose.theta_y = pose[4]
-        my_constrained_pose.target_pose.theta_z = pose[5]
-
-        req = ExecuteActionRequest()
-        req.input.oneof_action_parameters.reach_pose.append(my_constrained_pose)
-        req.input.name = "pose"+str(id)
-        req.input.handle.action_type = ActionType.REACH_POSE
-        req.input.handle.identifier = 1001
-
-        rospy.loginfo("Sending pose 1...")
-        self.last_action_notif_type = None
-        try:
-            self.execute_action(req)
-        except rospy.ServiceException:
-            rospy.logerr("Failed to send" + req.input.name)
-            return False
-        else:
-            rospy.loginfo("Waiting for"+req.input.name+"to finish...")
-
-        return self.wait_for_action_end_or_abort()
-    
     def get_path(self, msg):
         self.my_path_ = msg
     
-    def follow_path(self):
-        self.plot=True
-        if self.my_path_ == None:
-            rospy.logerr("No path received yet")
-            return False
-        
-        # First calculate the target poses
-        for i in range(len(self.my_path_.poses)):
-            ref_ee_pose=[self.my_path_.poses[i].pose.position.x,self.my_path_.poses[i].pose.position.y,self.my_path_.poses[i].pose.position.z]
-            ev_angles=self.arm_model.arm.inverse_kinematics(ref_ee_pose,np.zeros(6))
-            ev_poses=self.forward_kinematics(ev_angles)
-            self.target_pose_list.append(ev_poses)
-        
-        # Then go to each target pose
-        for i in range(len(self.target_pose_list)):
-            if not self.go_to_pose(self.target_pose_list[i],i):
-                return False
-        return True
-    
     def get_curr_state(self, msg):
         self.curr_state_ = np.array(msg.position[0:6])
+        print(np.degrees(self.curr_state_))
         # self.curr_state_ = msg
         self.plot_real_path()
 
+    def get_joint_angels(self):
+        return np.degrees(self.curr_state_)
+
     def plot_real_path(self):
-        if self.plot == False:
-            return
+        # if self.plot == False:
+        #     return
         # 创建一个 PoseStamped 消息
         real_poses = PoseStamped()
         real_poses.header.frame_id = "base_link"
@@ -248,20 +208,21 @@ class ArmControl(object):
         return T
 
     def get_transform_matrix(self,theta):
-        theta[1]+=np.pi/2
-        theta[2]+=np.pi/2
-        theta[3]+=np.pi/2
-        theta[4]+=np.pi
-        theta[5]+=np.pi/2
+        theta_copy = theta.copy()
+        theta_copy[1]+=np.pi/2
+        theta_copy[2]+=np.pi/2
+        theta_copy[3]+=np.pi/2
+        theta_copy[4]+=np.pi
+        theta_copy[5]+=np.pi/2
         alpha=np.array([np.pi/2,np.pi,np.pi/2,np.pi/2,np.pi/2,0])
         a=np.array([0,280,0,0,0,0])
         d=np.array([128.3+115.0,30,20,140+105,28.5+28.5,105+130])
-        T0_1=self.gen_T(theta[0],a[0],alpha[0],d[0])
-        T1_2=self.gen_T(theta[1],a[1],alpha[1],d[1])
-        T2_3=self.gen_T(theta[2],a[2],alpha[2],d[2])
-        T3_4=self.gen_T(theta[3],a[3],alpha[3],d[3])
-        T4_5=self.gen_T(theta[4],a[4],alpha[4],d[4])
-        T5_6=self.gen_T(theta[5],a[5],alpha[5],d[5])
+        T0_1=self.gen_T(theta_copy[0],a[0],alpha[0],d[0])
+        T1_2=self.gen_T(theta_copy[1],a[1],alpha[1],d[1])
+        T2_3=self.gen_T(theta_copy[2],a[2],alpha[2],d[2])
+        T3_4=self.gen_T(theta_copy[3],a[3],alpha[3],d[3])
+        T4_5=self.gen_T(theta_copy[4],a[4],alpha[4],d[4])
+        T5_6=self.gen_T(theta_copy[5],a[5],alpha[5],d[5])
         T_rote=np.array([[0,-1,0,0],[1,0,0,0],[0,0,1,0],[0,0,0,1]])
         T0_6=T0_1@T1_2@T2_3@T3_4@T4_5@T5_6@T_rote
         return T0_6
@@ -281,31 +242,124 @@ class ArmControl(object):
         z_l=T[2,3]/1000
         return [x_l,y_l,z_l,x,y,z]
     
-    def main(self):
-        if not self.is_init_success:
-            rospy.logerr("Initialization failed")
-            return False
-        
-        if not self.example_clear_faults():
-            return False
-        
-        if not self.example_set_cartesian_reference_frame():
-            return False
-        
-        if not self.example_subscribe_to_a_robot_notification():
-            return False
-        
-        if not self.go_home():
-            return False
-        
+    def send_joint_speeds_command(self,speeds):
+        rospy.wait_for_service('/my_gen3_lite/base/send_joint_speeds_command')
+        try:
+            send_speeds = rospy.ServiceProxy('/my_gen3_lite/base/send_joint_speeds_command', SendJointSpeedsCommand)
 
-        while not rospy.is_shutdown():
-            if self.my_path_ != None:
-                break
-        if not self.follow_path():
-            return False
-        rospy.loginfo("Complete painting!")
+            # 创建请求
+            joint_speeds = Base_JointSpeeds()
+            for i, speed in enumerate(speeds):
+                joint_speed = JointSpeed()
+                joint_speed.joint_identifier = i + 1
+                joint_speed.value = speed
+                joint_speed.duration = 0  # 0 for continuous command
+                joint_speeds.joint_speeds.append(joint_speed)
+
+            # 发送请求
+            response = send_speeds(joint_speeds)
+            print(f"Sent joint speeds: {speeds}")
+
+        except rospy.ServiceException as e:
+            print(f"Service call failed: {e}")
+
+    def go_to_pose(self, xd):
+        # Convert target to degrees
+        xd = np.degrees(xd)
+        x0 = self.get_joint_angels()
+        # print("Current State: ", x0)
+        print("Current State: ", np.degrees(self.curr_state_))
+        while np.linalg.norm(x0 - xd) > 2:
+            x0 = self.get_joint_angels()
+            print("Current State: ", x0)
+            print("Target State: ", xd)
+            u = -self.lqr.K.dot(x0 - xd)
+            u = np.radians(u)
+            self.send_joint_speeds_command(u)
+            time.sleep(0.1)
         return True
+
+    def follow_path(self):
+        self.plot=True
+        if self.my_path_ == None:
+            rospy.logerr("No path received yet")
+            return False
+        
+        # First calculate the target poses
+        for i in range(len(self.my_path_.poses)):
+            ref_ee_pose=[self.my_path_.poses[i].pose.position.x,self.my_path_.poses[i].pose.position.y,self.my_path_.poses[i].pose.position.z]
+            ev_angles=self.arm_model.arm.inverse_kinematics(ref_ee_pose,np.zeros(6))
+            # ev_poses=self.forward_kinematics(ev_angles)
+            self.target_pose_list.append(ev_angles)
+        
+        # Then go to each target pose
+        for i in range(len(self.target_pose_list)):
+            if not self.go_to_pose(self.target_pose_list[i]):
+                return False
+        return True
+
+    def main(self):
+        signal.signal(signal.SIGINT, self.signal_handler)
+
+        if not self.is_init_success:
+            rospy.logerr("Init failed!")
+            return
+
+        # Clear faults
+        if not self.example_clear_faults():
+            return
+
+        # Set the cartesian reference frame
+        if not self.example_set_cartesian_reference_frame():
+            return
+
+        # Subscribe to the robot notification
+        if not self.example_subscribe_to_a_robot_notification():
+            return
+
+        # Home the robot
+        if not self.go_home():
+            return
+        
+        # print(self.forward_kinematics(self.curr_state_))
+        # while True:
+        #     time.sleep(0.5)
+        # Define a target pose
+        if not self.follow_path():
+            return
+
+        # Home the robot
+        if not self.go_home():
+            return
+
+        # Unsubscribe from the robot notification
+        self.action_topic_sub.unregister()
+
+        rospy.loginfo("All done!")
+    
+class LQRControl:
+    def __init__(self, dt):
+        self.n = 6
+        self.A = np.eye(self.n)
+        self.B = dt*np.eye(self.n)
+        self.dt = dt
+        self.Q = np.diag([20, 20, 20, 20, 20, 20])
+        self.R = np.diag([30,30,30,30,30,30])
+        self.K = None
+    
+    def solve(self):
+        P = self.Q
+        max_iter = 100000
+        tolerance = 1e-5
+        for i in range(max_iter):
+            Pnext = self.Q + self.A.T.dot(P).dot(self.A) - self.A.T.dot(P).dot(self.B).dot(np.linalg.inv(self.R + self.B.T.dot(P).dot(self.B))).dot(self.B.T).dot(P).dot(self.A)
+            # If Converged:
+            if np.linalg.norm(P - Pnext) < tolerance:
+                break
+            P = Pnext
+        else:
+            print('Max Iterations Reached')
+        self.K = np.linalg.inv(self.R + self.B.T.dot(P).dot(self.B)).dot(self.B.T).dot(P).dot(self.A)
 
 if __name__ == '__main__':
     arm_control = ArmControl()

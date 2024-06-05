@@ -46,9 +46,9 @@ class ArmControl(object):
 
             # Init LQR Controller
             self.dt = 0.001
-            self.lqr = LQRControl(self.dt)
+            self.lqr = LQRControl(self.dt, True)
             self.lqr.solve()
-            self.v_history = deque(maxlen=5)
+            self.v_history = deque(maxlen=7)
 
             # Init the subscribers and publishers
             self.path_subscriber = rospy.Subscriber("/myPath", Path, self.get_path, queue_size=1)
@@ -75,10 +75,10 @@ class ArmControl(object):
             set_cartesian_reference_frame_full_name = '/' + self.robot_name + '/control_config/set_cartesian_reference_frame'
             rospy.wait_for_service(set_cartesian_reference_frame_full_name)
             self.set_cartesian_reference_frame = rospy.ServiceProxy(set_cartesian_reference_frame_full_name, SetCartesianReferenceFrame)
+            
+            rospy.wait_for_service('/my_gen3_lite/base/send_joint_speeds_command')
+            self.send_speeds = rospy.ServiceProxy('/my_gen3_lite/base/send_joint_speeds_command', SendJointSpeedsCommand)
 
-            send_gripper_command_full_name = '/' + self.robot_name + '/base/send_gripper_command'
-            rospy.wait_for_service(send_gripper_command_full_name)
-            self.send_gripper_command = rospy.ServiceProxy(send_gripper_command_full_name, SendGripperCommand)
             
             activate_publishing_of_action_notification_full_name = '/' + self.robot_name + '/base/activate_publishing_of_action_topic'
             rospy.wait_for_service(activate_publishing_of_action_notification_full_name)
@@ -256,10 +256,7 @@ class ArmControl(object):
         return [x_l,y_l,z_l,x,y,z]
     
     def send_joint_speeds_command(self,speeds):
-        rospy.wait_for_service('/my_gen3_lite/base/send_joint_speeds_command')
         try:
-            send_speeds = rospy.ServiceProxy('/my_gen3_lite/base/send_joint_speeds_command', SendJointSpeedsCommand)
-
             # 创建请求
             joint_speeds = Base_JointSpeeds()
             for i, speed in enumerate(speeds):
@@ -270,7 +267,7 @@ class ArmControl(object):
                 joint_speeds.joint_speeds.append(joint_speed)
 
             # 发送请求
-            response = send_speeds(joint_speeds)
+            response = self.send_speeds(joint_speeds)
             print(f"Sent joint speeds: {speeds}")
 
         except rospy.ServiceException as e:
@@ -320,6 +317,8 @@ class ArmControl(object):
     def example_send_gripper_command(self, value):
         # Initialize the request
         # Close the gripper
+        rospy.wait_for_service('/my_gen3_lite/base/send_gripper_command')
+        self.send_gripper_command = rospy.ServiceProxy('/my_gen3_lite/base/send_gripper_command', SendGripperCommand)
         req = SendGripperCommandRequest()
         finger = Finger()
         finger.finger_identifier = 0
@@ -382,13 +381,15 @@ class ArmControl(object):
         rospy.loginfo("All done!")
 
 class LQRControl:
-    def __init__(self, dt):
+    def __init__(self, dt, SIMULATION=False):
         self.n = 6
         self.A = np.eye(self.n)
         self.B = dt*np.eye(self.n)
         self.dt = dt
-        self.Q = np.diag([100, 100, 100, 100, 100, 100])
-        self.R = np.diag([0.008, 0.008, 0.008, 0.008, 0.008, 0.008])
+        self.Q = np.diag([30, 30, 30, 30, 30, 30])
+        self.R = np.diag([0.01, 0.01, 0.01, 0.01, 0.01, 0.01])
+        if SIMULATION:
+            self.R = np.diag([20, 20, 20, 20, 20, 20])
         self.K = None
     
     def solve(self):

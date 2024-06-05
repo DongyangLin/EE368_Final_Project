@@ -14,6 +14,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from Arm import Gen3LiteArm
 from scipy.spatial.transform import Rotation
+import actionlib
 
 class ArmControl(object):
     def __init__(self):
@@ -157,39 +158,71 @@ class ArmControl(object):
         rospy.sleep(1.0)
         return True
     
-    def go_to_pose(self, pose, id):
-        my_cartesian_speed = CartesianSpeed()
-        my_cartesian_speed.translation = 0.2 # m/s
-        my_cartesian_speed.orientation = 20  # deg/s
+    def FillCartesianWaypoint(self, new_x, new_y, new_z, new_theta_x, new_theta_y, new_theta_z, blending_radius):
+        cartesianWaypoint = CartesianWaypoint()
 
-        my_constrained_pose = ConstrainedPose()
-        my_constrained_pose.constraint.oneof_type.speed.append(my_cartesian_speed)
+        cartesianWaypoint.pose.x = new_x
+        cartesianWaypoint.pose.y = new_y
+        cartesianWaypoint.pose.z = new_z
+        cartesianWaypoint.pose.theta_x = new_theta_x
+        cartesianWaypoint.pose.theta_y = new_theta_y
+        cartesianWaypoint.pose.theta_z = new_theta_z
+        cartesianWaypoint.reference_frame = CartesianReferenceFrame.CARTESIAN_REFERENCE_FRAME_BASE
+        cartesianWaypoint.blending_radius = blending_radius
+       
+        return cartesianWaypoint
+    
+    def follow_path(self):
+        self.plot=True
+        if self.my_path_ == None:
+            rospy.logerr("No path received yet")
+            return False
+        
+        # First calculate the target poses
+        for i in range(len(self.my_path_.poses)):
+            ref_ee_pose=[self.my_path_.poses[i].pose.position.x,self.my_path_.poses[i].pose.position.y,self.my_path_.poses[i].pose.position.z]
+            ev_angles=self.arm_model.arm.inverse_kinematics(ref_ee_pose,np.zeros(6))
+            ev_poses=self.forward_kinematics(ev_angles)
+            self.target_pose_list.append(ev_poses)
 
-        my_constrained_pose.target_pose.x = pose[0]
-        my_constrained_pose.target_pose.y = pose[1]
-        my_constrained_pose.target_pose.z = pose[2]
-        my_constrained_pose.target_pose.theta_x = pose[3]
-        my_constrained_pose.target_pose.theta_y = pose[4]
-        my_constrained_pose.target_pose.theta_z = pose[5]
-
-        req = ExecuteActionRequest()
-        req.input.oneof_action_parameters.reach_pose.append(my_constrained_pose)
-        req.input.name = "pose"+str(id)
-        req.input.handle.action_type = ActionType.REACH_POSE
-        req.input.handle.identifier = 1001
-
-        rospy.loginfo("Sending pose 1...")
         self.last_action_notif_type = None
+
+        client = actionlib.SimpleActionClient('/' + self.robot_name + '/cartesian_trajectory_controller/follow_cartesian_trajectory', kortex_driver.msg.FollowCartesianTrajectoryAction)
+
+        client.wait_for_server()
+
+        goal = FollowCartesianTrajectoryGoal()
+
+        config = self.get_product_configuration()
+
+        print("config.output.model: ", config.output.model)
+
+        if config.output.model == ModelId.MODEL_ID_L31:
+        
+            goal.trajectory.append(self.FillCartesianWaypoint(0.439,  0.194,  0.448, math.radians(90.6), math.radians(-1.0), math.radians(150), 0))
+            goal.trajectory.append(self.FillCartesianWaypoint(0.200,  0.150,  0.400, math.radians(90.6), math.radians(-1.0), math.radians(150), 0))
+            goal.trajectory.append(self.FillCartesianWaypoint(0.350,  0.050,  0.300, math.radians(90.6), math.radians(-1.0), math.radians(150), 0))
+        else:
+            goal.trajectory.append(self.FillCartesianWaypoint(0.7,  0.0,   0.5,  math.radians(90), 0, math.radians(90), 0))
+            goal.trajectory.append(self.FillCartesianWaypoint(0.7,  0.0,   0.33, math.radians(90), 0, math.radians(90), 0.1))
+            goal.trajectory.append(self.FillCartesianWaypoint(0.7,  0.48,  0.33, math.radians(90), 0, math.radians(90), 0.1))
+            goal.trajectory.append(self.FillCartesianWaypoint(0.61, 0.22,  0.4,  math.radians(90), 0, math.radians(90), 0.1))
+            goal.trajectory.append(self.FillCartesianWaypoint(0.7,  0.48,  0.33, math.radians(90), 0, math.radians(90), 0.1))
+            goal.trajectory.append(self.FillCartesianWaypoint(0.63, -0.22, 0.45, math.radians(90), 0, math.radians(90), 0.1))
+            goal.trajectory.append(self.FillCartesianWaypoint(0.65, 0.05,  0.45, math.radians(90), 0, math.radians(90), 0))
+
+        # Call the service
+        rospy.loginfo("Sending goal(Cartesian waypoint) to action server...")
         try:
-            self.execute_action(req)
+            client.send_goal(goal)
         except rospy.ServiceException:
-            rospy.logerr("Failed to send" + req.input.name)
+            rospy.logerr("Failed to send goal.")
             return False
         else:
-            rospy.loginfo("Waiting for"+req.input.name+"to finish...")
+            client.wait_for_result(rospy.Duration(200.0))
+            return True
+        
 
-        return self.wait_for_action_end_or_abort()
-    
     def get_path(self, msg):
         self.my_path_ = msg
     

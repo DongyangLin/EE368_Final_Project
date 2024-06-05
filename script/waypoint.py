@@ -161,6 +161,8 @@ class ArmControl(object):
     def FillCartesianWaypoint(self, new_x, new_y, new_z, new_theta_x, new_theta_y, new_theta_z, blending_radius):
         cartesianWaypoint = CartesianWaypoint()
 
+        # cartesianWaypoint.maximum_angular_velocity = 1.0
+        # cartesianWaypoint.maximum_linear_velocity = 0.5
         cartesianWaypoint.pose.x = new_x
         cartesianWaypoint.pose.y = new_y
         cartesianWaypoint.pose.z = new_z
@@ -193,24 +195,13 @@ class ArmControl(object):
 
         goal = FollowCartesianTrajectoryGoal()
 
-        config = self.get_product_configuration()
-
-        print("config.output.model: ", config.output.model)
-
-        if config.output.model == ModelId.MODEL_ID_L31:
-        
-            goal.trajectory.append(self.FillCartesianWaypoint(0.439,  0.194,  0.448, math.radians(90.6), math.radians(-1.0), math.radians(150), 0))
-            goal.trajectory.append(self.FillCartesianWaypoint(0.200,  0.150,  0.400, math.radians(90.6), math.radians(-1.0), math.radians(150), 0))
-            goal.trajectory.append(self.FillCartesianWaypoint(0.350,  0.050,  0.300, math.radians(90.6), math.radians(-1.0), math.radians(150), 0))
-        else:
-            goal.trajectory.append(self.FillCartesianWaypoint(0.7,  0.0,   0.5,  math.radians(90), 0, math.radians(90), 0))
-            goal.trajectory.append(self.FillCartesianWaypoint(0.7,  0.0,   0.33, math.radians(90), 0, math.radians(90), 0.1))
-            goal.trajectory.append(self.FillCartesianWaypoint(0.7,  0.48,  0.33, math.radians(90), 0, math.radians(90), 0.1))
-            goal.trajectory.append(self.FillCartesianWaypoint(0.61, 0.22,  0.4,  math.radians(90), 0, math.radians(90), 0.1))
-            goal.trajectory.append(self.FillCartesianWaypoint(0.7,  0.48,  0.33, math.radians(90), 0, math.radians(90), 0.1))
-            goal.trajectory.append(self.FillCartesianWaypoint(0.63, -0.22, 0.45, math.radians(90), 0, math.radians(90), 0.1))
-            goal.trajectory.append(self.FillCartesianWaypoint(0.65, 0.05,  0.45, math.radians(90), 0, math.radians(90), 0))
-
+        for i in range(len(self.target_pose_list)):
+            goal.trajectory.append(self.FillCartesianWaypoint(self.target_pose_list[i][0], 
+                                                              self.target_pose_list[i][1], 
+                                                              self.target_pose_list[i][2], 
+                                                              math.radians(self.target_pose_list[i][3]), 
+                                                              math.radians(self.target_pose_list[i][4]), 
+                                                              math.radians(self.target_pose_list[i][5]), 0))
         # Call the service
         rospy.loginfo("Sending goal(Cartesian waypoint) to action server...")
         try:
@@ -219,31 +210,13 @@ class ArmControl(object):
             rospy.logerr("Failed to send goal.")
             return False
         else:
-            client.wait_for_result(rospy.Duration(200.0))
+            client.wait_for_result(rospy.Duration(1000.0))
             return True
         
 
     def get_path(self, msg):
         self.my_path_ = msg
     
-    def follow_path(self):
-        self.plot=True
-        if self.my_path_ == None:
-            rospy.logerr("No path received yet")
-            return False
-        
-        # First calculate the target poses
-        for i in range(len(self.my_path_.poses)):
-            ref_ee_pose=[self.my_path_.poses[i].pose.position.x,self.my_path_.poses[i].pose.position.y,self.my_path_.poses[i].pose.position.z]
-            ev_angles=self.arm_model.arm.inverse_kinematics(ref_ee_pose,np.zeros(6))
-            ev_poses=self.forward_kinematics(ev_angles)
-            self.target_pose_list.append(ev_poses)
-        
-        # Then go to each target pose
-        for i in range(len(self.target_pose_list)):
-            if not self.go_to_pose(self.target_pose_list[i],i):
-                return False
-        return True
     
     def get_curr_state(self, msg):
         self.curr_state_ = np.array(msg.position[0:6])

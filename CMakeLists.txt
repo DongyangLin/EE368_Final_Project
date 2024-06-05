@@ -47,4 +47,5 @@ catkin_install_python(PROGRAMS script/ArmControl.py
                                script/test.py
                                script/circle.py
                                script/lqr.py
+                               script/waypoint.py
                       DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
